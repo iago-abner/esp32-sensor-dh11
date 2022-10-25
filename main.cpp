@@ -1,45 +1,71 @@
-#include <wifi.h>
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <WiFi.h>
 #include <HTTPClient.h>
 
-const int LM35 = A0;
-float temperature;
+const int SAMPLES= 10;
 
-const char *ssid = "";
-const char *password = ""; 
-const char *server = "http://ip:porta/endpoint" 
+#define CLIENT "ESP RFID"        
+#define TYPE "ESP32"              
 
-void setup(){
+RTC_DATA_ATTR char name[15] = CLIENT;
+
+StaticJsonDocument<500> doc;
+
+const int LM35 = 13; 
+float reading; 
+
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
+const char* serverName = "http://localhost:3000/users";
+
+void setup() {
   Serial.begin(9600);
+  Serial.print("Connecting to: ");
+  Serial.print(ssid);
+  Serial.print(" with password: ");
+  Serial.println(password);
 
   WiFi.begin(ssid, password);
-  while(WiFi.status() != WL_CONNECTED){
+  while(WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.print(".");
   }
+  Serial.println("");
+  Serial.print("Connected to WiFi network with IP Address: ");
+  Serial.println(WiFi.localIP());
 }
 
-void loop(){
-  temperature = (float(analogRead(LM35))*5/(1023))/0.01;
-  
-  if(WiFi.status() == WL_CONNECTED){
-    WiFiClient client;
-    HTTPClient http;
+void loop() {
+  sensorTemp();
+  delay(10000);
+  Serial.println("Posting...");
+  postData();
+  serializeJsonPretty(doc, Serial);
+  Serial.println("Done.");
+}
 
-    http.begin(client, server);
-    http.addHeader("Content-Type", "application/json");
+float sensorTemp() {
+  reading = (float(analogRead(LM35))*5/(1023))/0.01;
 
-    char *temperature = static_cast<chat *>(malloc(sizeof(char) * 8));
+  doc["temperature"] = reading;
 
-    Serial.print(temperature);
-    Serial.println(WiFi.localIP());
-    
-    int responseCode = http.POST(temperature);
-    if (responseCode <= 0){
-      Serial.println('Error');
-    }
+  return reading;
+}
 
-    http.end;
-    delete temperature;
+void postData() {     
+      if(WiFi.status()== WL_CONNECTED){
+      HTTPClient http;
 
-    delay(5000);
-  }
+      http.begin(serverName);
+      http.addHeader("Content-Type", "application/json");
+
+      String json;
+      serializeJson(doc["temperature"], json);
+      Serial.println("Dados armazenados para o POST");
+      Serial.println(json);
+      int httpResponseCode = http.POST(json);
+      Serial.println("POSTED");
+      Serial.println(httpResponseCode);
+      }
 }
